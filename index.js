@@ -5,24 +5,27 @@ const express = require("express");
 const multer = require("multer");
 const Jimp = require("jimp");
 const fs = require("fs");
+const path = require("path");
 const jsQR = require("jsqr");
 const QRCode = require("qrcode");
 const { BakongKHQR } = require("bakong-khqr");
 
 const app = express();
 
+const uploadDir = path.join(__dirname, 'uploads');
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/");
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname);
-  },
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
 });
 
 const upload = multer({
-  storage,
+  storage: storage,
   limits: {
     fileSize: 3 * 1000000, // 3MB
   },
@@ -34,7 +37,7 @@ const upload = multer({
       return cb(error, false);
     }
     cb(null, true);
-  },
+  }
 });
 
 // Middleware to parse request payloads
@@ -50,7 +53,11 @@ app.get("/", (req, res) => {
 app.post("/decode", upload.single("image"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
+      return res.status(400).json({
+        status: 400,
+        message: "No file uploaded",
+        body: {}
+      });
     }
 
     // Load image using Jimp
@@ -69,12 +76,26 @@ app.post("/decode", upload.single("image"), async (req, res) => {
       // Validate the KHQR code
       const isKHQR = BakongKHQR.verify(qrContent).isValid;
       if (isKHQR) {
-        res.json({ data: qrContent });
+        res.json({
+          status: 200,
+          message: "QR String Extracted Successfully",
+          body: {
+            data: qrContent
+          }
+        });
       } else {
-        res.status(400).json({ error: "Invalid KHQR code" });
+        res.status(400).json({
+          status: 400,
+          message: "Invalid KHQR code",
+          body: {}
+        });
       }
     } else {
-      res.status(400).json({ error: "No QR code found in the image" });
+      res.status(400).json({
+        status: 400,
+        message: "No QR code found in the image",
+        body: {}
+      });
     }
 
     // Remove image after processing
@@ -86,35 +107,63 @@ app.post("/decode", upload.single("image"), async (req, res) => {
       // File removed
     });
   } catch (error) {
-    res.status(500).json({ error: "Error decoding QR code", message: error.message });
+    res.status(500).json({
+      status: 500,
+      message: "Error decoding QR code",
+      body: {
+        error: error.message
+      }
+    });
   }
 });
 
 // Generate QR code from text
 app.post("/generate", (req, res) => {
   if (!req.body.text) {
-    return res.status(400).json({ error: "Please enter a valid text" });
+    return res.status(400).json({
+      status: 400,
+      message: "Please enter a valid text",
+      body: {}
+    });
   }
 
   try {
     QRCode.toDataURL(req.body.text, (err, url) => {
       if (err) {
-        return res.status(500).json({ error: "Error creating QR code", message: err.message });
+        return res.status(500).json({
+          status: 500,
+          message: "Error creating QR code",
+          body: {
+            error: err.message
+          }
+        });
       }
-      res.json({ qr: url });
+      res.json({
+        status: 200,
+        message: "QR Code Generated Successfully",
+        body: {
+          qr: url
+        }
+      });
     });
   } catch (error) {
-    res.status(500).json({ error: "Error creating QR code", message: error.message });
+    res.status(500).json({
+      status: 500,
+      message: "Error creating QR code",
+      body: {
+        error: error.message
+      }
+    });
   }
 });
 
 // Error handler middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).send({
+  res.status(500).json({
     status: 500,
     message: err.message,
-    body: {},
+    body: {}
   });
 });
 
