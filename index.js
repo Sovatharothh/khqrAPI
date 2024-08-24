@@ -1,7 +1,8 @@
-const dotEnv = require("dotenv");
-dotEnv.config();
+const dotenv = require("dotenv");
+dotenv.config();
 
 const express = require("express");
+const cors = require("cors");
 const multer = require("multer");
 const Jimp = require("jimp");
 const fs = require("fs");
@@ -12,16 +13,28 @@ const { BakongKHQR } = require("bakong-khqr");
 
 const app = express();
 
+// Configure CORS
+const corsOptions = {
+  origin: ["https://app.polymerinvoice.com/", "https://preview-app-internal.polymersuite.asia/"],
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions)); // Apply CORS globally
+
+// Create uploads directory if it doesn't exist
 const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    fs.mkdirSync(uploadDir, { recursive: true });
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
-  }
+  },
 });
 
 const upload = multer({
@@ -37,7 +50,7 @@ const upload = multer({
       return cb(error, false);
     }
     cb(null, true);
-  }
+  },
 });
 
 // Middleware to parse request payloads
@@ -51,12 +64,13 @@ app.get("/", (req, res) => {
 
 // Decode QR code from uploaded image
 app.post("/decode", upload.single("image"), async (req, res) => {
+  console.log(req.headers.host)
   try {
     if (!req.file) {
       return res.status(400).json({
         status: 400,
         message: "No file uploaded",
-        body: {}
+        body: {},
       });
     }
 
@@ -79,22 +93,20 @@ app.post("/decode", upload.single("image"), async (req, res) => {
         res.json({
           status: 200,
           message: "QR String Extracted Successfully",
-          body: {
-            data: qrContent
-          }
+          body: { data: qrContent },
         });
       } else {
         res.status(400).json({
           status: 400,
           message: "Invalid KHQR code",
-          body: {}
+          body: {},
         });
       }
     } else {
       res.status(400).json({
         status: 400,
         message: "No QR code found in the image",
-        body: {}
+        body: {},
       });
     }
 
@@ -110,9 +122,7 @@ app.post("/decode", upload.single("image"), async (req, res) => {
     res.status(500).json({
       status: 500,
       message: "Error decoding QR code",
-      body: {
-        error: error.message
-      }
+      body: { error: error.message },
     });
   }
 });
@@ -123,7 +133,7 @@ app.post("/generate", (req, res) => {
     return res.status(400).json({
       status: 400,
       message: "Please enter a valid text",
-      body: {}
+      body: {},
     });
   }
 
@@ -133,26 +143,20 @@ app.post("/generate", (req, res) => {
         return res.status(500).json({
           status: 500,
           message: "Error creating QR code",
-          body: {
-            error: err.message
-          }
+          body: { error: err.message },
         });
       }
       res.json({
         status: 200,
         message: "QR Code Generated Successfully",
-        body: {
-          qr: url
-        }
+        body: { qr: url },
       });
     });
   } catch (error) {
     res.status(500).json({
       status: 500,
       message: "Error creating QR code",
-      body: {
-        error: error.message
-      }
+      body: { error: error.message },
     });
   }
 });
@@ -163,7 +167,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({
     status: 500,
     message: err.message,
-    body: {}
+    body: {},
   });
 });
 
